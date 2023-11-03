@@ -104,6 +104,10 @@ module.exports = ({ strapi, adapter, config }) => {
         adapter.addCollectionNamePrefixToId({ entryId, contentType })
       );
 
+      strapi.log.info(
+        `A task to delete ${documentsIds.length} documents of the indexes "${indexUids.join(', ')}" in Meilisearch has been enqueued (Task uid: ${task.taskUid}).`
+      )
+
       return await Promise.all(
         indexUids.map(
           async (indexUid) =>
@@ -139,13 +143,18 @@ module.exports = ({ strapi, adapter, config }) => {
         if (sanitized.length === 0) {
           return await Promise.all(
             indexUids.map(
-              async (indexUid) =>
-                await client.index(indexUid).deleteDocument(
+              async (indexUid) => {
+                const task = await client.index(indexUid).deleteDocument(
                   adapter.addCollectionNamePrefixToId({
                     contentType,
                     entryId: entry.id,
                   })
                 )
+                strapi.log.info(
+                  `A task to delete one document from the Meilisearch indexes "${indexUids.join(', ')}" has been enqueued (Task uid: ${task.taskUid}).`
+                )
+                return task;
+              }
             )
           );
         } else {
@@ -310,7 +319,10 @@ module.exports = ({ strapi, adapter, config }) => {
       );
       await store.addIndexedContentType({ contentType }); //TODO: Is this array of index compatible?
 
-      console.log('addEntriesToMeilisearch tasks: ', tasks);
+      strapi.log.info(
+        `The task to add ${documents.length} documents to the Meilisearch indexes "${indexUids.join(', ')}" has been enqueued (Task uids: ${tasks.map(task => task.taskUid).join(', ')}).`
+      )
+
       return tasks;
     },
 
@@ -329,12 +341,17 @@ module.exports = ({ strapi, adapter, config }) => {
       const indexUids = config.getIndexNamesOfContentType({ contentType });
 
       // Get Meilisearch Index settings from model
-      await Promise.all(
+      const tasks = await Promise.all(
         indexUids.map(async (indexUid) => {
           const settings = config.getSettings({ contentType, indexUid });
-          await client.index(indexUid).updateSettings(settings);
+          const task = await client.index(indexUid).updateSettings(settings);
+          return task;
         })
       );
+
+      strapi.log.info(
+        `A task to update the settings to the Meilisearch indexes "${indexUids.join(', ')}" has been enqueued (Task uids: ${tasks.map(task => task.taskUid).join(', ')}).`
+      )
 
       // Callback function for batching action
       const addDocuments = async ({ entries, contentType }) => {
@@ -355,7 +372,9 @@ module.exports = ({ strapi, adapter, config }) => {
                 .addDocuments(documents, { primaryKey: '_meilisearch_id' })
           )
         );
-
+        strapi.log.info(
+          `A task to add ${documents.length} documents to the Meilisearch index "${indexUid}" has been enqueued (Task uids: ${tasks.map(task => task.taskUid).join(', ')}).`
+        )
         return tasks.map((task) => task.taskUid);
       };
 
@@ -439,6 +458,7 @@ module.exports = ({ strapi, adapter, config }) => {
             entriesId: entries.map((entry) => entry.id),
           });
         };
+        
         await contentTypeService.actionInBatches({
           contentType,
           callback: deleteEntries,
