@@ -37,7 +37,7 @@ async function syncIndexedCollections({
   const contentTypes = contentTypeService.getContentTypesUid()
 
   for (const contentType of contentTypes) {
-    const indexUid = meilisearch.getIndexNameOfContentType({ contentType })
+    const indexUid = meilisearch.getIndexNamesOfContentType({ contentType })
     const indexInMeiliSearch = indexUids.includes(indexUid)
     const contentTypeInIndexStore = indexedContentTypes.includes(contentType)
 

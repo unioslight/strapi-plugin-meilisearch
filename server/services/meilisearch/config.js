@@ -1,5 +1,5 @@
-'use strict'
-const { isObject } = require('../../utils')
+'use strict';
+const { isObject } = require('../../utils');
 /**
  * Log an error message on a failed action on a contentType.
  *
@@ -12,13 +12,15 @@ const { isObject } = require('../../utils')
 const aborted = ({ contentType, action }) => {
   strapi.log.error(
     `Indexing of ${contentType} aborted as the data could not be ${action}`
-  )
-  return [] // return empty array to avoid indexing entries that might contain sensitive data
-}
+  );
+  return []; // return empty array to avoid indexing entries that might contain sensitive data
+};
 
 module.exports = ({ strapi }) => {
-  const meilisearchConfig = strapi.config.get('plugin.meilisearch') || {}
-  const contentTypeService = strapi.plugin('meilisearch').service('contentType')
+  const meilisearchConfig = strapi.config.get('plugin.meilisearch') || {};
+  const contentTypeService = strapi
+    .plugin('meilisearch')
+    .service('contentType');
   return {
     /**
      * Get the name of the index from Meilisearch in which the contentType content is added.
@@ -26,13 +28,15 @@ module.exports = ({ strapi }) => {
      * @param {object} options
      * @param {string} options.contentType - ContentType name.
      *
-     * @return {String} - Index name
+     * @return {string[]} - Index name
      */
-    getIndexNameOfContentType: function ({ contentType }) {
-      const collection = contentTypeService.getCollectionName({ contentType })
+    getIndexNamesOfContentType: function ({ contentType }) {
+      const collection = contentTypeService.getCollectionName({ contentType });
 
-      const contentTypeConfig = meilisearchConfig[collection] || {}
-      return contentTypeConfig.indexName || collection
+      const { indexName } = meilisearchConfig[collection] || {};
+      const contentTypeConfigArr =
+        !!indexName && (Array.isArray(indexName) ? indexName : [indexName]);
+      return contentTypeConfigArr || [collection];
     },
 
     /**
@@ -41,13 +45,13 @@ module.exports = ({ strapi }) => {
      * @param {object} options
      * @param {string} options.contentType - ContentType name.
      *
-     * @return {String} - EntriesQuery rules.
+     * @return {string} - EntriesQuery rules.
      */
     entriesQuery: function ({ contentType }) {
-      const collection = contentTypeService.getCollectionName({ contentType })
-      const contentTypeConfig = meilisearchConfig[collection] || {}
+      const collection = contentTypeService.getCollectionName({ contentType });
+      const contentTypeConfig = meilisearchConfig[collection] || {};
 
-      return contentTypeConfig.entriesQuery || {}
+      return contentTypeConfig.entriesQuery || {};
     },
 
     /**
@@ -61,8 +65,8 @@ module.exports = ({ strapi }) => {
      * @return {Promise<Array<Object>>} - Converted or mapped data
      */
     transformEntries: async function ({ contentType, entries = [] }) {
-      const collection = contentTypeService.getCollectionName({ contentType })
-      const contentTypeConfig = meilisearchConfig[collection] || {}
+      const collection = contentTypeService.getCollectionName({ contentType });
+      const contentTypeConfig = meilisearchConfig[collection] || {};
 
       try {
         if (
@@ -71,24 +75,24 @@ module.exports = ({ strapi }) => {
         ) {
           const transformed = await Promise.all(
             entries.map(
-              async entry =>
+              async (entry) =>
                 await contentTypeConfig.transformEntry({
                   entry,
                   contentType,
                 })
             )
-          )
+          );
 
           if (transformed.length > 0 && !isObject(transformed[0])) {
-            return aborted({ contentType, action: 'transformed' })
+            return aborted({ contentType, action: 'transformed' });
           }
-          return transformed
+          return transformed;
         }
       } catch (e) {
-        strapi.log.error(e)
-        return aborted({ contentType, action: 'transformed' })
+        strapi.log.error(e);
+        return aborted({ contentType, action: 'transformed' });
       }
-      return entries
+      return entries;
     },
 
     /**
@@ -102,8 +106,8 @@ module.exports = ({ strapi }) => {
      * @return {Promise<Array<Object>>} - Converted or mapped data
      */
     filterEntries: async function ({ contentType, entries = [] }) {
-      const collection = contentTypeService.getCollectionName({ contentType })
-      const contentTypeConfig = meilisearchConfig[collection] || {}
+      const collection = contentTypeService.getCollectionName({ contentType });
+      const contentTypeConfig = meilisearchConfig[collection] || {};
 
       try {
         if (
@@ -115,23 +119,23 @@ module.exports = ({ strapi }) => {
               const isValid = await contentTypeConfig.filterEntry({
                 entry,
                 contentType,
-              })
+              });
 
               // If the entry does not answers the predicate
-              if (!isValid) return filteredEntries
+              if (!isValid) return filteredEntries;
 
-              const syncFilteredEntries = await filteredEntries
-              return [...syncFilteredEntries, entry]
+              const syncFilteredEntries = await filteredEntries;
+              return [...syncFilteredEntries, entry];
             },
             []
-          )
-          return filtered
+          );
+          return filtered;
         }
       } catch (e) {
-        strapi.log.error(e)
-        return aborted({ contentType, action: 'filtered' })
+        strapi.log.error(e);
+        return aborted({ contentType, action: 'filtered' });
       }
-      return entries
+      return entries;
     },
 
     /**
@@ -145,12 +149,19 @@ module.exports = ({ strapi }) => {
      * @type {import('meilisearch').Settings}
      * @return {Settings} - Meilisearch index settings
      */
-    getSettings: function ({ contentType }) {
-      const collection = contentTypeService.getCollectionName({ contentType })
-      const contentTypeConfig = meilisearchConfig[collection] || {}
+    getSettings: function ({ contentType, indexUid }) {
+      const collection = contentTypeService.getCollectionName({ contentType });
+      const contentTypeConfig = meilisearchConfig[collection] || {};
 
-      const settings = contentTypeConfig.settings || {}
-      return settings
+      const settings = contentTypeConfig.settings || {};
+      if (!Array.isArray(settings)) {
+        return settings;
+      }
+      const allIndexes = this.getIndexNamesOfContentType({ contentType });
+      const targetIndex = allIndexes.findIndex(
+        (item) => item.indexName === indexUid
+      );
+      return settings[targetIndex];
     },
 
     /**
@@ -162,21 +173,25 @@ module.exports = ({ strapi }) => {
      * @returns {string[]} List of contentTypes storing its data in the provided indexName
      */
     listContentTypesWithCustomIndexName: function ({ indexName }) {
+      // console.log('listContentTypesWithCustomIndexName: ');
+      // console.log('indexName: ', indexName);
       const contentTypes =
         strapi
           .plugin('meilisearch')
           .service('contentType')
-          .getContentTypesUid() || []
-      const collectionNames = contentTypes.map(contentType =>
+          .getContentTypesUid() || [];
+      const collectionNames = contentTypes.map((contentType) =>
         contentTypeService.getCollectionName({ contentType })
-      )
-      const contentTypeWithIndexName = collectionNames.filter(contentType => {
-        const name = this.getIndexNameOfContentType({
+      );
+      const contentTypeWithIndexName = collectionNames.filter((contentType) => {
+        const indexUids = this.getIndexNamesOfContentType({
           contentType,
-        })
-        return name === indexName
-      })
-      return contentTypeWithIndexName
+        });
+        return indexUids.includes(indexName);
+      });
+      
+      // console.log('contentTypeWithIndexName: ', contentTypeWithIndexName);
+      return contentTypeWithIndexName;
     },
 
     /**
@@ -190,16 +205,16 @@ module.exports = ({ strapi }) => {
      */
     removeSensitiveFields: function ({ contentType, entries }) {
       // TODO: should be persisted somewhere to make it more performant
-      const attrs = strapi.contentTypes[contentType].attributes
+      const attrs = strapi.contentTypes[contentType].attributes;
       const privateFields = Object.entries(attrs).map(([field, schema]) =>
         schema.private ? field : false
-      )
+      );
 
-      return entries.map(entry => {
-        privateFields.forEach(attr => delete entry[attr])
+      return entries.map((entry) => {
+        privateFields.forEach((attr) => delete entry[attr]);
 
-        return entry
-      })
+        return entry;
+      });
     },
 
     /**
@@ -213,15 +228,15 @@ module.exports = ({ strapi }) => {
      * @return {Array<Object>} - Published entries.
      */
     removeUnpublishedArticles: function ({ entries, contentType }) {
-      const collection = contentTypeService.getCollectionName({ contentType })
-      const contentTypeConfig = meilisearchConfig[collection] || {}
+      const collection = contentTypeService.getCollectionName({ contentType });
+      const contentTypeConfig = meilisearchConfig[collection] || {};
 
-      const entriesQuery = contentTypeConfig.entriesQuery || {}
+      const entriesQuery = contentTypeConfig.entriesQuery || {};
 
       if (entriesQuery.publicationState === 'preview') {
-        return entries
+        return entries;
       } else {
-        return entries.filter(entry => !(entry?.publishedAt === null))
+        return entries.filter((entry) => !(entry?.publishedAt === null));
       }
     },
 
@@ -237,16 +252,16 @@ module.exports = ({ strapi }) => {
      * @return {Array<Object>} - Published entries.
      */
     removeLocaleEntries: function ({ entries, contentType }) {
-      const collection = contentTypeService.getCollectionName({ contentType })
-      const contentTypeConfig = meilisearchConfig[collection] || {}
+      const collection = contentTypeService.getCollectionName({ contentType });
+      const contentTypeConfig = meilisearchConfig[collection] || {};
 
-      const entriesQuery = contentTypeConfig.entriesQuery || {}
+      const entriesQuery = contentTypeConfig.entriesQuery || {};
 
       if (!entriesQuery.locale || entriesQuery.locale === 'all') {
-        return entries
+        return entries;
       } else {
-        return entries.filter(entry => entry.locale === entriesQuery.locale)
+        return entries.filter((entry) => entry.locale === entriesQuery.locale);
       }
     },
-  }
-}
+  };
+};
