@@ -37,8 +37,8 @@ async function syncIndexedCollections({
   const contentTypes = contentTypeService.getContentTypesUid()
 
   for (const contentType of contentTypes) {
-    const indexUid = meilisearch.getIndexNamesOfContentType({ contentType })
-    const indexInMeiliSearch = indexUids.includes(indexUid)
+    const configuredIndexUids = meilisearch.getIndexNamesOfContentType({ contentType })
+    const indexInMeiliSearch = indexUids.some(indexUid => configuredIndexUids.includes(indexUid));
     const contentTypeInIndexStore = indexedContentTypes.includes(contentType)
 
     // Remove any collection that is not in Meilisearch anymore

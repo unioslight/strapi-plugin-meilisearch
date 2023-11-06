@@ -173,8 +173,6 @@ module.exports = ({ strapi }) => {
      * @returns {string[]} List of contentTypes storing its data in the provided indexName
      */
     listContentTypesWithCustomIndexName: function ({ indexName }) {
-      // console.log('listContentTypesWithCustomIndexName: ');
-      // console.log('indexName: ', indexName);
       const contentTypes =
         strapi
           .plugin('meilisearch')
@@ -190,7 +188,6 @@ module.exports = ({ strapi }) => {
         return indexUids.includes(indexName);
       });
       
-      // console.log('contentTypeWithIndexName: ', contentTypeWithIndexName);
       return contentTypeWithIndexName;
     },
 
