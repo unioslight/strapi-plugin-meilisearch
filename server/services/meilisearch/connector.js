@@ -144,7 +144,7 @@ module.exports = ({ strapi, adapter, config }) => {
           config,
           adapter,
         });
-        
+
         if (sanitized.length === 0) {
           return await Promise.all(
             indexUids.map(async (indexUid) => {
@@ -169,7 +169,9 @@ module.exports = ({ strapi, adapter, config }) => {
                 .index(indexUid)
                 .updateDocuments(sanitized, { primaryKey: '_meilisearch_id' });
               strapi.log.info(
-                `A task to update ${sanitized.length} document/s in the Meilisearch indexes "${indexUids.join(
+                `A task to update ${
+                  sanitized.length
+                } document/s in the Meilisearch indexes "${indexUids.join(
                   ', '
                 )}" has been enqueued (Task uid: ${task.taskUid}).`
               );
@@ -351,14 +353,36 @@ module.exports = ({ strapi, adapter, config }) => {
       const client = Meilisearch({ apiKey, host });
       const indexUids = config.getIndexNamesOfContentType({ contentType });
 
-      // Get Meilisearch Index settings from model
-      const tasks = await Promise.all(
-        indexUids.map(async (indexUid) => {
-          const settings = config.getSettings({ contentType, indexUid });
-          const task = await client.index(indexUid).updateSettings(settings);
-          return task;
-        })
-      );
+      // Get Meilisearch Index settings from model and
+      const tasks = (
+        await Promise.all(
+          indexUids.map(async (indexUid) => {
+            const settings = config.getSettings({ contentType, indexUid });
+            try {
+              const existingSettings = await client
+                .index(indexUid)
+                .getSettings();
+              if (
+                existingSettings &&
+                (existingSettings.filterableAttributes.length > 1 ||
+                  existingSettings.filterableAttributes[0] !== '*' ||
+                  existingSettings.sortableAttributes.length > 1 ||
+                  existingSettings.sortableAttributes[0] !== '*')
+              ) {
+                console.log(
+                  `Existing filterableAttributes or sortableAttributes attributes found on index [${indexUid}]. Manual update is required.`
+                );
+                return null;
+              }
+            } catch (error) {
+              //Do nothing with the error. Meilisearch throws error if index doesn't exist but we don't care
+            }
+
+            const task = await client.index(indexUid).updateSettings(settings);
+            return task;
+          })
+        )
+      ).filter((task) => !!task?.taskUid);
 
       strapi.log.info(
         `A task to update the settings to the Meilisearch indexes "${indexUids.join(
